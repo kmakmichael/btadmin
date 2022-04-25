@@ -91,8 +91,10 @@ if __name__ == '__main__':
 
         # communicate with throttle and steering here
         # consider functions
-        match current_state:
-            case _: pass
+        # should this be triggered only when changing states??
+        if current_state is 0:
+            # send HI to throttle controller
+            pass
 
 
         # handle any new data
@@ -103,9 +105,11 @@ if __name__ == '__main__':
                 if data:
                     (src,msg) = par.msg(data)
                     #print(f'[admin] recieved {data.decode("utf-8")}')
-                    match src:
-                        case "N": status[src] = par.navi(msg)
-                        case "V" | "R": status[src] = par.binary(msg)
+                    if src == "N":
+                        status[src] = par.navi(msg)
+                    if src == "V" or src == "R":
+                        status[src] = par.binary(msg)
+                    else:
                         case _: print(f'[admin] bad signal: {data.decode("utf-8")}')
                 else:
                     break
