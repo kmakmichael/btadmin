@@ -1,5 +1,4 @@
 echo "starting admin"
-python btadmin.py
+python3 btadmin.py
 sleep 1s
 echo "starting vision"
-
