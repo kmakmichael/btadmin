@@ -110,7 +110,7 @@ if __name__ == '__main__':
                     if src == "V" or src == "R":
                         status[src] = par.binary(msg)
                     else:
-                        case _: print(f'[admin] bad signal: {data.decode("utf-8")}')
+                        print(f'[admin] bad signal: {data.decode("utf-8")}')
                 else:
                     break
         except KeyError:
