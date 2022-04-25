@@ -12,7 +12,4 @@ def navi(m):
 
 
 def binary(m):
-    if m == b'1':
-        return True
-    else:
-        return False
+    return m == b'1'
