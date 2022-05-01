@@ -1,11 +1,11 @@
 import socket
 import sys
 import os
-import re
 import btparse as par
 from enum import IntEnum
+from threading import Thread, Event, Barrier, Lock
 
-
+server_addr = os.environ['BT_ADMIN_ADDR']
 names = {
         "N": "navigation",
         "V": "vision",
@@ -27,36 +27,55 @@ class Throttle(IntEnum):
 # is this the right way to go about it
 # class Steering(IntEnum):
 
-status = {
+# data from the input modules
+input_data = {
         "N": False,
         "V": False,
         "R": False,
-        "T": False,
-        "S": False
         }
+input_modules = len(input_data)
+output_modules = 2
 
-def init_modules(sock):
-    # confirmation of other scripts
-    print('[admin] waiting for full clear')
-    while not all(status.values()):
-        connection, caddr = sock.accept()
-        try:
-            while True:
-                data = connection.recv(16)
-                if data:
-                    (src,msg) = par.msg(data)
-                    if src in names.keys() and msg == b'READY':
-                        print(f'[admin] confirmation from {names[src]} recieved')
-                        status[src] = True
-                    elif src not in status.keys():
-                        print(f'[admin] invalid source {src}')
-                else:
-                    break
-        finally:
-            connection.close()
+# threading stuff
+data_changed = Event()
+data_lock = Lock()
+inputs_ready = Barrier(input_modules+1)
+outputs_ready = Barrier(output_modules+1)
+
+def client_thread(connection, id):
+    while True:
+        data = connection.recv(3)
+        if data:
+            (src,msg) = par.msg(data)
+            if msg == b'R':
+                break
+    try:
+        print(f'[admin] confirmation from {names[src]} recieved', flush=True)
+    except KeyError:
+        return
+    inputs_ready.wait()
+    nd = False
+    try:
+        while True:
+            data = connection.recv(3)
+            if data:
+                (src,msg) = par.msg(data)
+                # print(f'[admin] recieved {data.decode("utf-8")} -> {src}:{msg}', flush=True)
+                if src == "N":
+                    nd = par.navi(msg)
+                if src == "V" or src == "R":
+                    nd = par.binary(msg)
+                with data_lock:
+                    if  id[src] != nd:
+                        id[src] = nd
+                        data_changed.set()
+    except KeyError:
+        # this should trigger somethng more catastrophic, probably
+        print('ok but how')
+        return
 
 
-if __name__ == '__main__':
+def server_socket():
     # get and check filepath
     server_addr = os.environ['BT_ADMIN_ADDR']
     try:
@@ -64,57 +83,50 @@ if __name__ == '__main__':
     except:
         if os.path.exists(server_addr):
             raise
-
-    print(f'[admin] starting socket at {server_addr}')
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(server_addr)
+    return sock
+
+def set_outputs(s):
+    print(f'state has become {s}, setting outputs to ...')
+    pass
+
+if __name__ == '__main__':
+    # get a socket
+    print(f'[admin] starting socket at {server_addr}')
+    sock = server_socket()
     sock.listen(5)
 
+    # connect to modules
     print('[admin] socket ready')
-    init_modules(sock)
-    print('[admin] all clear')
+    threads = []
+    # TODO: find some way for this to not be limited to 3. if we get a bad connection we're boned
+    for i in range(0,input_modules):
+        c, caddr = sock.accept()
+        th = Thread(target=client_thread, args=[c, input_data])
+        th.start()
+        threads.append(th)
+    # wait for them to be ready
+    inputs_ready.wait()
+    print('[admin] all input modules ready')
 
-    # start the state machine
+    # connect to output modules
+
+
+    # start state machine
     print('[admin] starting FSM')
-    status["V"] = False
-    status["R"] = False
     prev_state = current_state
     while True:
-        if all(status.values()):
-            current_state = State.GO
-        else:
-            current_state = State.STOP
-        # print(f'[admin]     --> state is now {State(current_state)}')
-        if prev_state != current_state:
-            print(f'[admin] state changed {prev_state} -> {current_state}')
-            prev_state = current_state
-
-        # communicate with throttle and steering here
-        # consider functions
-        # should this be triggered only when changing states??
-        if current_state is 0:
-            # send HI to throttle controller
-            pass
-
-
-        # handle any new data
-        connection, caddr = sock.accept()
-        try:
-            while True:
-                data = connection.recv(16)
-                if data:
-                    (src,msg) = par.msg(data)
-                    #print(f'[admin] recieved {data.decode("utf-8")}')
-                    if src == "N":
-                        status[src] = par.navi(msg)
-                    if src == "V" or src == "R":
-                        status[src] = par.binary(msg)
-                    else:
-                        print(f'[admin] bad signal: {data.decode("utf-8")}')
-                else:
-                    break
-        except KeyError:
-            raise
-            continue
-        finally:
-            connection.close()
+        data_changed.wait()
+        data_changed.clear()
+        # state machine here
+        with data_lock:
+            # print(f'input_data is {input_data}')
+            if all(input_data.values()):
+                current_state = State.GO
+            else:
+                current_state = State.STOP
+            if prev_state != current_state:
+                print(f'[admin] state changed {prev_state} -> {current_state}')
+                prev_state = current_state
+            set_outputs(current_state)

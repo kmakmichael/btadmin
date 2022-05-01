@@ -5,10 +5,10 @@ def msg(m):
 
 # TODO: add complexity for turns when steering is implemented
 def navi(m):
-    if m == b'GO':
-        return False
-    else:
+    if m == b'G' or m == b'T':
         return True
+    else:
+        return False
 
 
 def binary(m):
