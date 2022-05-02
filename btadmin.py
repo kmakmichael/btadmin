@@ -2,6 +2,7 @@ import socket
 import sys
 import os
 import btparse as par
+import time
 from enum import IntEnum
 from threading import Thread, Event, Barrier, Lock
 
@@ -52,15 +53,17 @@ def client_thread(connection, id):
     try:
         print(f'[admin] confirmation from {names[src]} recieved', flush=True)
     except KeyError:
+        print('uh-oh')
         return
     inputs_ready.wait()
+    connection.send(b'ACK')
     nd = False
     try:
         while True:
             data = connection.recv(3)
             if data:
                 (src,msg) = par.msg(data)
-                # print(f'[admin] recieved {data.decode("utf-8")} -> {src}:{msg}', flush=True)
+                # print(f'[{time.clock_gettime(time.CLOCK_REALTIME)}][admin] recieved {data.decode("utf-8")} -> {src}:{msg}', flush=True)
                 if src == "N":
                     nd = par.navi(msg)
                 if src == "V" or src == "R":
@@ -103,6 +106,7 @@ if __name__ == '__main__':
     # TODO: find some way for this to not be limited to 3. if we get a bad connection we're boned
     for i in range(0,input_modules):
         c, caddr = sock.accept()
+        # print(f'[admin] received connection from {caddr}')
         th = Thread(target=client_thread, args=[c, input_data])
         th.start()
         threads.append(th)
