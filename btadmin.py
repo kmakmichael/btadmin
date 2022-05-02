@@ -106,7 +106,7 @@ if __name__ == '__main__':
     # TODO: find some way for this to not be limited to 3. if we get a bad connection we're boned
     for i in range(0,input_modules):
         c, caddr = sock.accept()
-        # print(f'[admin] received connection from {caddr}')
+        print(f'[admin] received connection from {caddr}')
         th = Thread(target=client_thread, args=[c, input_data])
         th.start()
         threads.append(th)
