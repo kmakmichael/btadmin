@@ -2,7 +2,6 @@ import socket
 import sys
 import os
 import btparse as par
-import time
 from enum import IntEnum
 from threading import Thread, Event, Barrier, Lock
 
@@ -43,7 +42,9 @@ data_lock = Lock()
 inputs_ready = Barrier(input_modules+1)
 outputs_ready = Barrier(output_modules+1)
 
-def client_thread(connection, id):
+
+
+def client_thread(connection, indata):
     while True:
         data = connection.recv(3)
         if data:
@@ -63,14 +64,14 @@ def client_thread(connection, id):
             data = connection.recv(3)
             if data:
                 (src,msg) = par.msg(data)
-                # print(f'[{time.clock_gettime(time.CLOCK_REALTIME)}][admin] recieved {data.decode("utf-8")} -> {src}:{msg}', flush=True)
+                # print(f'[admin] recieved {data.decode("utf-8")} -> {src}:{msg}', flush=True)
                 if src == "N":
                     nd = par.navi(msg)
                 if src == "V" or src == "R":
                     nd = par.binary(msg)
                 with data_lock:
-                    if  id[src] != nd:
-                        id[src] = nd
+                    if indata[src] != nd:
+                        indata[src] = nd
                         data_changed.set()
     except KeyError:
         # this should trigger somethng more catastrophic, probably
@@ -90,9 +91,15 @@ def server_socket():
     sock.bind(server_addr)
     return sock
 
+
 def set_outputs(s):
-    print(f'state has become {s}, setting outputs to ...')
+    if s == 0:
+        print('[admin] === STOP ===')
+    else:
+        print('[admin] ===  GO  ===')
+    # print(f'state has become {s}, setting outputs to ...')
     pass
+
 
 if __name__ == '__main__':
     # get a socket
@@ -131,6 +138,6 @@ if __name__ == '__main__':
             else:
                 current_state = State.STOP
             if prev_state != current_state:
-                print(f'[admin] state changed {prev_state} -> {current_state}')
+                # print(f'[admin] state changed {prev_state} -> {current_state}')
                 prev_state = current_state
-            set_outputs(current_state)
+                set_outputs(current_state)
